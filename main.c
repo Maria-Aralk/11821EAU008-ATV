@@ -1,71 +1,82 @@
 #include <stdlib.h>
-int main(intargc,char*argv[])
-{
-  while(1){};
-  /* Nao deveria chegar aqui */
-  return EXIT_SUCCESS;
-  }
-  #define SRAM_START  0x20000000U/* Inicio da SRAM CORTEX-M */
-  #define SRAM_SIZE   (128U * 1024U)/* Tam. SRAM STM32F411 128K */
-  #define SRAM_END    ((SRAM_START) +
-                      (SRAM_SIZE))/* Final da SRAM STM32F411 */
-  #define STACK_START SRAM_END/* Inicio da Stack */
-  
-void reset_handler     (void);
-void nmi_handler       (void) __attribute__ ((weak, alias("default_handler")));
-void hardfault_handler (void) __attribute__ ((weak, alias("default_handler")));
-void memmanage_handler (void) __attribute__ ((weak, alias("default_handler")));
-void busfault_handler  (void) __attribute__ ((weak, alias("default_handler")));
-void usagefault_handler(void) __attribute__ ((weak, alias("default_handler")));
-void svc_handler       (void) __attribute__ ((weak, alias("default_handler")));
-void debugmon_handler  (void) __attribute__ ((weak, alias("default_handler")));
-void pendsv_handler    (void) __attribute__ ((weak, alias("default_handler")));
-void systick_handler   (void) __attribute__ ((weak, alias("default_handler")));
-externuint32_t_sdata;/* Inicio da secao .data */
-externuint32_t_edata;/* Fim da secao .data */
-externuint32_t_la_data;/* Endereco de carga na RAM da secao .data */
-externuint32_t_sbss;/* Inicio da secao .bss */
-externuint32_t_ebss;/* Fim da secao .bss */
+/* AHB1 Base Addresses*****************************************************/
+#define STM32_RCC_BASE0x40023800/* 0x40023800-0x40023bff: Resetand Clock control RCC */
+/* AHB2 Base Addresses ******************************************************/
+#define STM32_GPIOC_BASE     0x48000800U/* 0x48000800-0x48000bff: GPIO3
+Port C *//* Register Offsets *********************************************************/
+#define STM32_RCC_AHB1ENR_OFFSET  0x0030/* AHB1 Peripheral Clock enableregister */
+#define STM32_GPIO_MODER_OFFSET   0x0000/* GPIO port mode register */
+#define STM32_GPIO_OTYPER_OFFSET  0x0004/* GPIO port output type register */
+#define STM32_GPIO_PUPDR_OFFSET   0x000c/* GPIO port pull-up/pull-downregister */
+#define STM32_GPIO_BSRR_OFFSET    0x0018/* GPIO port bit set/reset register */
+/* Register Addresses *******************************************************/
 
-uint32_tvectors[] __attribute__((section(".isr_vectors"))) =
-{STACK_START,/* 0x0000 0000 */
-(uint32_t)reset_handler,/* 0x0000 0004 */
-(uint32_t)nmi_handler,/* 0x0000 0008 */
-(uint32_t)hardfault_handler,/* 0x0000 000c */
-(uint32_t)memmanage_handler,/* 0x0000 0010 */
-(uint32_t)busfault_handler,/* 0x0000 0014 */
-(uint32_t)usagefault_handler,/* 0x0000 0018 */18
-0,/* 0x0000 001c */
-0,/* 0x0000 0020 */
-0,/* 0x0000 0024 */
-0,/* 0x0000 0028 */
-(uint32_t)svc_handler,/* 0x0000 002c */
-(uint32_t)debugmon_handler,/* 0x0000 0030 */
-0,/* 0x0000 0034 */
-(uint32_t)pendsv_handler,/* 0x0000 0038 */
-(uint32_t)systick_handler,/* 0x0000 003c */
-};
-void reset_handler(void){}
-void default_handler(void){while(1){};}
-void reset_handler(){
-  uint32_t i;
-/* Copia a secao .data para a RAM */
-uint32_t size = (uint32_t)&_edata - (uint32_t)&_sdata;
-uint8_t* pDst =(uint8_t*)&_sdata;/* SRAM */
-uint8_t* pSrc =(uint8_t*)&_etext;/* FLASH */
+#define STM32_RCC_AHB1ENR(STM32_RCC_BASE+STM32_RCC_AHB1ENR_OFFSET)
+#define STM32_GPIOC_MODER(STM32_GPIOC_BASE+STM32_GPIO_MODER_OFFSET)
+#define STM32_GPIOC_OTYPER(STM32_GPIOC_BASE+STM32_GPIO_OTYPER_OFFSET)
+#define STM32_GPIOC_PUPDR(STM32_GPIOC_BASE+STM32_GPIO_PUPDR_OFFSET)/* AHB1 Peripheral Clock enable register */
+#define RCC_AHB1ENR_GPIOCEN(1 << 2)/* Bit 2:  IO port C clockenable *//* GPIO port mode register */
+#define GPIO_MODER_INPUT(0)/* Input */
+#define GPIO_MODER_OUTPUT(1)/* General purpose output mode */
+#define GPIO_MODER_ALT(2)/* Alternate mode */
+#define GPIO_MODER_ANALOG(3)/* Analog mode */
+#define GPIO_MODER13_SHIFT(26)
+#define GPIO_MODER13_MASK(3 << GPIO_MODER13_SHIFT)/* GPIO port output type register */
+#define GPIO_OTYPER_PP(0)/* 0=Output push-pull */
+#define GPIO_OTYPER_OD(1)/* 1=Output open-drain */
+#define GPIO_OT13_SHIFT(13)
+#define GPIO_OT13_MASK(1 << GPIO_OT13_SHIFT)/* GPIO port pull-up/pull-down register */
+#define GPIO_PUPDR_NONE(0)/* No pull-up, pull-down */
+#define GPIO_PUPDR_PULLUP(1)/* Pull-up */
+#define GPIO_PUPDR_PULLDOWN(2)/* Pull-down */
+#define GPIO_PUPDR13_SHIFT(26) 
+#define GPIO_PUPDR13_MASK(3 << GPIO_PUPDR13_SHIFT)
+int main(int argc,char*argv[]){
+  uint32_t reg;4
+/* GPIO port bit set/reset register */
+#define GPIO_BSRR_SET(n)(1 << (n))
+#define GPIO_BSRR_RST(n)(1 << (n + 16))
+static uint32_t led_status;
+int main(int argc,char*argv[]){
+  uint32_t reg;
 
-for(i =0; i < size; i++)
-{ 
-  *pDst++ = *pSrc++;
-  }/* Preenche a secao .bss com zero */
-size = (uint32_t)&_ebss - (uint32_t)&_sbss;
-pDst = (uint8_t*)&_sbss;
-for(i =0; i < size; i++){
-*pDst++ =0;
-}
-/* Chama a funcao main() */
-main();}
-void default_handler(void)
-{
-  while(1){};
-  }
+/* Ponteiros para registradores */
+
+uint32_t*pRCC_AHB1ENR  = (uint32_t*)STM32_RCC_AHB1ENR;
+uint32_t*pGPIOC_MODER  = (uint32_t*)STM32_GPIOC_MODER;
+uint32_t*pGPIOC_OTYPER = (uint32_t*)STM32_GPIOC_OTYPER;
+uint32_t*pGPIOC_PUPDR  = (uint32_t*)STM32_GPIOC_PUPDR;
+uint32_t*pGPIOC_BSRR   = (uint32_t*)STM32_GPIOC_BSRR;
+/* Habilita clock GPIOC */
+reg  = *pRCC_AHB1ENR;reg |RCC_AHB1ENR_GPIOCEN;*pRCC_AHB1ENR = reg;/* Configura PC13 como saida pull-up off e pull-down off */
+reg = *pGPIOC_MODER;
+reg &= ~(GPIO_MODER13_MASK);
+reg |= (GPIO_MODER_OUTPUT << GPIO_MODER13_SHIFT);
+*pGPIOC_MODER = reg;
+reg = *pGPIOC_OTYPER;
+reg &= ~(GPIO_OT13_MASK);
+reg |= (GPIO_OTYPER_PP << GPIO_OT13_SHIFT);
+*pGPIOC_OTYPER = reg;
+reg = *pGPIOC_PUPDR;
+reg &= ~(GPIO_PUPDR13_MASK);
+reg |= (GPIO_PUPDR_NONE << GPIO_PUPDR13_SHIFT);
+*pGPIOC_PUPDR = reg;
+while(1);{
+
+/* Nao deveria chegar aqui */
+*pGPIOC_BSRR = GPIO_BSRR_SET(13);
+led_status =0;
+for(uint32_t i =0; i < LED_DELAY; i++);
+*pGPIOC_BSRR = GPIO_BSRR_RST(13);
+led_status =1;
+for(uint32_t i =0; i < LED_DELAY; i++);}
+static const charfw_version[] = {'V','1','.','0'};
+static uint32_t led_status;
+return EXIT_SUCCESS;}
+
+
+
+
+
+
+
